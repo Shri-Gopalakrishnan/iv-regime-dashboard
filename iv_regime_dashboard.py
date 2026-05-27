@@ -54,24 +54,25 @@ st.markdown("""
 def fetch_volatility_data(symbol: str, period: str = "2y") -> pd.DataFrame:
     """
     Fetch historical price data and compute volatility metrics.
-
-    Uses close-to-close log returns to compute realised volatility,
-    annualised by sqrt(252). Rolling windows compute short and long
-    term volatility for regime analysis.
-
-    Note: Yahoo Finance provides free historical OHLCV data.
-    True implied volatility requires options market data (paid).
-    Realised volatility is a close proxy for short-dated IV.
-
-    Parameters
-    ----------
-    symbol : ticker symbol e.g. 'SPY', 'AAPL', 'QQQ'
-    period : history length e.g. '2y', '1y', '6mo'
+    Includes retry logic for Yahoo Finance rate limiting on cloud deployments.
     """
-    try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period=period)
+    import time
+    df = pd.DataFrame()
+    for attempt in range(3):
+        try:
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period=period)
+            if not df.empty:
+                break
+            time.sleep(2 * (attempt + 1))
+        except Exception:
+            if attempt < 2:
+                time.sleep(3 * (attempt + 1))
+            else:
+                st.error(f"Yahoo Finance rate limited. Wait 30 seconds then click Refresh.")
+                return pd.DataFrame()
 
+    try:
         if df.empty:
             return pd.DataFrame()
 
